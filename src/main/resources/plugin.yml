@@ -1,0 +1,83 @@
+name: SimpleRailway
+main: net.engin33r.bukkit.SimpleRailway.SimpleRailway
+version: 0.0.1
+author: Ilya "EngiN33R" Gavrikov
+database: true
+
+commands:
+  spawner:
+    description: Interact with minecart spawners
+    usage: /spawner <create|delete|edit|activate|list>
+    permission: simplerailway.spawner.root
+    permission-message: You do not have permission to use /spawner
+  despawner:
+    description: Interact with minecart despawners
+    usage: /despawner <create|delete|edit|list>
+    permission: simplerailway.despawner.root
+    permission-message: You do not have permission to use /despawner
+
+permissions:
+  simplerailway.*:
+    description: Gives access to all SimpleRailway commands
+    children:
+      simplerailway.spawner.*: true
+      simplerailway.despawner.*: true
+      simplerailway.cartdamage: true
+
+  simplerailway.spawner.*:
+    description: Gives access to all modes of the /spawner command
+    children:
+      simplerailway.spawner.root: true
+      simplerailway.spawner.create: true
+      simplerailway.spawner.delete: true
+      simplerailway.spawner.edit: true
+      simplerailway.spawner.activate: true
+      simplerailway.spawner.list: true
+    default: op
+  simplerailway.spawner.root:
+    description: Allows you to use the /spawner command itself
+    default: op
+  simplerailway.spawner.create:
+    description: Allows you to create new minecart spawners
+    default: op
+  simplerailway.spawner.delete:
+    description: Allows you to delete minecart spawners
+    default: op
+  simplerailway.spawner.edit:
+    description: Allows you to edit existing minecart spawners
+    default: op
+  simplerailway.spawner.activate:
+    description: Allows you to activate minecart spawners
+    default: op
+  simplerailway.spawner.list:
+    description: Allows you to list existing minecart spawners
+    default: op
+
+  simplerailway.despawner.*:
+    description: Gives access to all modes of the /despawner command
+    children:
+      simplerailway.despawner.root: true
+      simplerailway.despawner.create: true
+      simplerailway.despawner.delete: true
+      simplerailway.despawner.edit: true
+      simplerailway.despawner.list: true
+    default: op
+  simplerailway.despawner.root:
+    description: Allows you to use the /despawner command itself
+    default: op
+  simplerailway.despawner.create:
+    description: Allows you to create new minecart despawners
+    default: op
+  simplerailway.despawner.delete:
+    description: Allows you to delete minecart despawners
+    default: op
+  simplerailway.despawner.edit:
+    description: Allows you to edit existing minecart despawners
+    default: op
+  simplerailway.despawner.list:
+    description: Allows you to list existing minecart despawners
+    default: op
+
+  simplerailway.cartdamage:
+    description: Allows you to damage spawner-created carts
+    default: op
