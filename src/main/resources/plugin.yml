@@ -1,6 +1,6 @@
 name: SimpleRailway
 main: net.engin33r.bukkit.SimpleRailway.SimpleRailway
-version: 0.0.1
+version: 0.0.2
 author: Ilya "EngiN33R" Gavrikov
 database: true
 
@@ -80,4 +80,7 @@ permissions:
 
   simplerailway.cartdamage:
     description: Allows you to damage spawner-created carts
+    default: op
+  simplerailway.cartexit:
+    description: Allows you to exit spawner-created carts mid-ride
     default: op

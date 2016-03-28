@@ -1,34 +1,27 @@
 package net.engin33r.bukkit.SimpleRailway;
 
-import com.avaje.ebean.validation.Length;
-import com.avaje.ebean.validation.NotEmpty;
-import com.avaje.ebean.validation.NotNull;
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.table.DatabaseTable;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
-
-@Entity()
-@Table(name="sr_spawners")
+@DatabaseTable(tableName="sr_spawners")
 public class SimpleRailwaySpawner {
-    @Id
+    @DatabaseField(id = true)
     private String name;
 
-    @NotNull
+    @DatabaseField(canBeNull = false)
     private double x;
-    @NotNull
+    @DatabaseField(canBeNull = false)
     private double y;
-    @NotNull
+    @DatabaseField(canBeNull = false)
     private double z;
 
-    @Length(max=1)
-    @NotEmpty
+    @DatabaseField(canBeNull = false)
     private String direction;
 
-    @NotEmpty
+    @DatabaseField(canBeNull = false)
     private String worldName;
 
     public String getName() {
