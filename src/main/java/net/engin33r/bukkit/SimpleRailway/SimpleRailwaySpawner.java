@@ -5,6 +5,7 @@ import com.j256.ormlite.table.DatabaseTable;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 
 @DatabaseTable(tableName="sr_spawners")
 public class SimpleRailwaySpawner {
@@ -19,7 +20,7 @@ public class SimpleRailwaySpawner {
     private double z;
 
     @DatabaseField(canBeNull = false)
-    private String direction;
+    private BlockFace direction;
 
     @DatabaseField(canBeNull = false)
     private String worldName;
@@ -56,11 +57,11 @@ public class SimpleRailwaySpawner {
         this.z = z;
     }
 
-    public String getDirection() {
+    public BlockFace getDirection() {
         return direction;
     }
 
-    public void setDirection(String direction) {
+    public void setDirection(BlockFace direction) {
         this.direction = direction;
     }
 

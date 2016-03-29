@@ -12,50 +12,52 @@ import org.bukkit.entity.Vehicle;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.vehicle.*;
+import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.scheduler.BukkitScheduler;
 
 import java.sql.SQLException;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
+import java.util.logging.Level;
 
 public final class SimpleRailwayListener implements Listener {
     private final SimpleRailway plugin;
     private List<SimpleRailwayDespawner> list;
     private Dao<SimpleRailwayDespawner, String> despawnerDao;
     private Dao<SimpleRailwayCart, Integer> cartDao;
-    private List<Vehicle> spawnedCarts = new LinkedList<>();
-    private BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
+    private final Set<Vehicle> spawnedCarts = Collections.newSetFromMap(new WeakHashMap<Vehicle, Boolean>());
+    private final BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
 
-    public SimpleRailwayListener(SimpleRailway plugin) {
+    private static Vehicle getCartByUUID(UUID id) {
+        for (World w : Bukkit.getServer().getWorlds()) {
+            for (Minecart e : w.getEntitiesByClass(Minecart.class)) {
+                if (e.getUniqueId().equals(id)) {
+                    return e;
+                }
+            }
+        }
+        return null;
+    }
+
+    public SimpleRailwayListener(final SimpleRailway plugin, final ConnectionSource source) {
         this.plugin = plugin;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
 
-        final ConnectionSource source = SimpleRailwayListener.this.plugin.getConnectionSource();
-        scheduler.runTaskAsynchronously(plugin, new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    // Instantiate DAO's and form a list of all despawners
-                    despawnerDao = DaoManager.createDao(source, SimpleRailwayDespawner.class);
-                    cartDao = DaoManager.createDao(source, SimpleRailwayCart.class);
-                    SimpleRailwayListener.this.list = despawnerDao.queryBuilder().query();
+        try {
+            // Instantiate DAO's and form a list of all despawners
+            despawnerDao = DaoManager.createDao(source, SimpleRailwayDespawner.class);
+            cartDao = DaoManager.createDao(source, SimpleRailwayCart.class);
+            SimpleRailwayListener.this.list = despawnerDao.queryBuilder().query();
 
-                    // Form a list of all spawner-created carts
-                    List<SimpleRailwayCart> carts = cartDao.queryBuilder().query();
-                    for (World w : Bukkit.getServer().getWorlds()) {
-                        for (Entity e : w.getEntitiesByClass(Minecart.class)) {
-                            for (SimpleRailwayCart c : carts) {
-                                if (e.getEntityId() == c.getId()) {
-                                    spawnedCarts.add((Vehicle) e);
-                                }
-                            }
-                        }
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
+            // Form a list of all spawner-created carts
+            List<SimpleRailwayCart> carts = cartDao.queryBuilder().query();
+            for (SimpleRailwayCart c : carts) {
+                Vehicle v = getCartByUUID(c.getId());
+                if (v != null) spawnedCarts.add(v);
             }
-        });
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
+        }
     }
 
     public void updateList() {
@@ -65,7 +67,7 @@ public final class SimpleRailwayListener implements Listener {
                 try {
                     SimpleRailwayListener.this.list = despawnerDao.queryBuilder().query();
                 } catch (SQLException e) {
-                    e.printStackTrace();
+                    plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                 }
             }
         });
@@ -73,7 +75,7 @@ public final class SimpleRailwayListener implements Listener {
 
     public void registerCart(final Vehicle v) {
         spawnedCarts.add(v);
-        final int entityID = v.getEntityId();
+        final UUID entityID = v.getUniqueId();
         scheduler.runTaskAsynchronously(plugin, new Runnable() {
             @Override
             public void run() {
@@ -82,7 +84,7 @@ public final class SimpleRailwayListener implements Listener {
                     cart.setId(entityID);
                     cartDao.create(cart);
                 } catch (SQLException e) {
-                    e.printStackTrace();
+                    plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                 }
             }
         });
@@ -90,31 +92,83 @@ public final class SimpleRailwayListener implements Listener {
 
     private void unregisterCart(final Vehicle v) {
         spawnedCarts.remove(v);
-        final int entityID = v.getEntityId();
+        final UUID entityID = v.getUniqueId();
         scheduler.runTaskAsynchronously(plugin, new Runnable() {
             @Override
             public void run() {
                 try {
-                    SimpleRailwayCart cart = cartDao.queryBuilder().where().eq("id", entityID)
-                            .queryForFirst();
+                    SimpleRailwayCart cart = new SimpleRailwayQuery(cartDao)
+                            .getCartByUUID(entityID);
                     cartDao.delete(cart);
                 } catch (SQLException e) {
-                    e.printStackTrace();
+                    plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                 }
             }
         });
     }
 
     @EventHandler
-    public void onMinecartHit(VehicleDamageEvent event) {
-        if (event.getAttacker() instanceof Player) {
-            if (event.getVehicle() instanceof Minecart) {
-                // Prevent player damage to spawner-created carts unless the player has permission
-                if (spawnedCarts.contains(event.getVehicle()) &&
-                        !((Player) event.getAttacker()).hasPermission("simplerailway.cartdamage")) {
-                    event.setCancelled(true);
+    public void onChunkLoad(final ChunkLoadEvent event) {
+        scheduler.runTaskAsynchronously(plugin, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (Entity e : event.getChunk().getEntities()) {
+                        if (e instanceof Minecart && !spawnedCarts.contains(e)) {
+                            SimpleRailwayCart cart = new SimpleRailwayQuery(cartDao)
+                                    .getCartByUUID(e.getUniqueId());
+                            if (cart != null) {
+                                spawnedCarts.add((Vehicle) e);
+                            }
+                        }
+                    }
+                } catch (SQLException e) {
+                    plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                 }
             }
+        });
+    }
+
+    @EventHandler
+    public void onChunkUnload(final ChunkUnloadEvent event) {
+        for (Entity e : event.getChunk().getEntities()) {
+            if (e instanceof Minecart && spawnedCarts.contains(e)) {
+                spawnedCarts.remove(e);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onMinecartHit(VehicleDamageEvent event) {
+        if (event.getAttacker() instanceof Player && event.getVehicle() instanceof Minecart) {
+            // Prevent player damage to spawner-created carts unless the player has permission
+            if (spawnedCarts.contains(event.getVehicle()) &&
+                    !((Player) event.getAttacker()).hasPermission("simplerailway.cartdamage")) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onMinecartEnter(VehicleEnterEvent event) {
+        if (event.getVehicle() instanceof Minecart && event.getEntered() instanceof Player) {
+            // Logout posterity check: if a player enters a cart registered in the DB but not the in-memory set,
+            // add it to the set
+            final Vehicle v = event.getVehicle();
+            scheduler.runTaskAsynchronously(plugin, new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        SimpleRailwayCart cart = new SimpleRailwayQuery(cartDao).getCartByUUID(v.getUniqueId());
+
+                        if (cart != null && !spawnedCarts.contains(v)) {
+                            spawnedCarts.add(v);
+                        }
+                    } catch (SQLException e) {
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
+                    }
+                }
+            });
         }
     }
 

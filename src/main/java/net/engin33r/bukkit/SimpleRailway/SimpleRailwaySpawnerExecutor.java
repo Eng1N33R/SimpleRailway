@@ -2,10 +2,12 @@ package net.engin33r.bukkit.SimpleRailway;
 
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
+import com.j256.ormlite.support.ConnectionSource;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.BlockFace;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -17,6 +19,7 @@ import org.bukkit.util.Vector;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.logging.Level;
 
 /**
  * A {@link CommandExecutor} implementation for the /spawner command.
@@ -24,16 +27,29 @@ import java.util.List;
 public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
     private final SimpleRailway plugin;
     private Dao<SimpleRailwaySpawner, String> spawnerDao;
-    private Dao<SimpleRailwayCart, Integer> cartDao;
     private final BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
 
-    public SimpleRailwaySpawnerExecutor(SimpleRailway plugin) {
+    private static BlockFace stringToBlockFace(String s) {
+        switch (s.toLowerCase()) {
+            case "n":
+                return BlockFace.NORTH;
+            case "w":
+                return BlockFace.WEST;
+            case "s":
+                return BlockFace.SOUTH;
+            case "e":
+                return BlockFace.EAST;
+            default:
+                return BlockFace.SELF;
+        }
+    }
+
+    public SimpleRailwaySpawnerExecutor(SimpleRailway plugin, ConnectionSource source) {
         this.plugin = plugin;
         try {
-            this.spawnerDao = DaoManager.createDao(plugin.getConnectionSource(), SimpleRailwaySpawner.class);
-            this.cartDao = DaoManager.createDao(plugin.getConnectionSource(), SimpleRailwayCart.class);
+            this.spawnerDao = DaoManager.createDao(source, SimpleRailwaySpawner.class);
         } catch (SQLException e) {
-            e.printStackTrace();
+            plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
         }
     }
 
@@ -74,19 +90,19 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                 return true;
             }
 
-            final World world = ((Entity) sender).getWorld();
-            final Location loc = new Location(world, x, y, z);
+            World tworld = Bukkit.getServer().getWorlds().get(0);
+            if (sender instanceof Entity) tworld = ((Entity) sender).getWorld();
 
-            //SimpleRailwaySpawner spawner = plugin.getDatabase().find(SimpleRailwaySpawner.class).where()
-            //    .ieq("name", name).findUnique();
+            final World world = tworld;
+            final Location loc = new Location(world, x, y, z);
 
             // Find spawner by name and insert if one doesn't exist
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        SimpleRailwaySpawner spawner = spawnerDao.queryBuilder().where()
-                                .eq("name", name).queryForFirst();
+                        SimpleRailwaySpawner spawner = new SimpleRailwayQuery(spawnerDao)
+                                .getSpawnerByName(name);
 
                         if (spawner != null) {
                             if (sender instanceof Player) {
@@ -100,16 +116,15 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                         spawner.setName(name);
                         spawner.setLocation(loc);
                         spawner.setWorldName(world.getName());
-                        spawner.setDirection(direction);
+                        spawner.setDirection(stringToBlockFace(direction));
 
-                        //plugin.getDatabase().save(spawner);
                         spawnerDao.create(spawner);
                         if (sender instanceof Player)
                             sender.sendMessage(ChatColor.GREEN + "Created spawner "
                                     + ChatColor.BOLD + "'" + name + "'");
                         plugin.getLogger().info("Created spawner '" + name + "'");
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
@@ -128,16 +143,13 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
             }
             final String name = args[1];
 
-            //SimpleRailwaySpawner spawner = plugin.getDatabase().find(SimpleRailwaySpawner.class).where()
-            //        .ieq("name", name).findUnique();
-
             // Find spawner by name and delete if found
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        SimpleRailwaySpawner spawner = spawnerDao.queryBuilder().where()
-                                .eq("name", name).queryForFirst();
+                        SimpleRailwaySpawner spawner = new SimpleRailwayQuery(spawnerDao)
+                                .getSpawnerByName(name);
 
                         if (spawner == null) {
                             if (sender instanceof Player) {
@@ -146,14 +158,13 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                             }
                         }
 
-                        //plugin.getDatabase().delete(spawner);
                         spawnerDao.delete(spawner);
                         if (sender instanceof Player)
                             sender.sendMessage(ChatColor.GREEN + "Deleted spawner "
                                     + ChatColor.BOLD + "'" + name + "'");
                         plugin.getLogger().info("Deleted spawner '" + name + "'");
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
@@ -173,68 +184,53 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
             }
             final String name = args[1];
 
-            //SimpleRailwaySpawner spawner = plugin.getDatabase().find(SimpleRailwaySpawner.class).where()
-            //        .ieq("name", name).findUnique();
-
             // Process spawning; first, find the spawner with the given name
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        final SimpleRailwaySpawner spawner = spawnerDao.queryBuilder().where()
-                                .eq("name", name).queryForFirst();
+                        final SimpleRailwaySpawner spawner = new SimpleRailwayQuery(spawnerDao)
+                                .getSpawnerByName(name);
 
                         if (spawner == null) {
                             if (sender instanceof Player) {
                                 sender.sendMessage(ChatColor.RED + "No spawner was found with the specified name!");
-                                return;
                             }
-                        }
+                        } else {
+                            // Spawn minecart, force mount player and apply force if necessary
+                            scheduler.runTask(plugin, new Runnable() {
+                                @Override
+                                public synchronized void run() {
+                                    final Minecart cart = Bukkit.getServer().getWorld(spawner.getWorldName())
+                                            .spawn(spawner.getLocation(), Minecart.class);
 
-                        // Spawn minecart, force mount player and apply force if necessary
-                        scheduler.runTask(plugin, new Runnable() {
-                            @Override
-                            public synchronized void run() {
-                                final Minecart cart = Bukkit.getServer().getWorld(spawner.getWorldName())
-                                        .spawn(spawner.getLocation(), Minecart.class);
+                                    // Register cart in the database and add it to the list
+                                    plugin.getListener().registerCart(cart);
 
-                                // Register cart in the database and add it to the list
-                                plugin.getListener().registerCart(cart);
-
-                                // If "push" is specified, assign a normal direction vector according to
-                                // the cardinal directions as the velocity and apply it to the cart
-                                if (args.length > 2) {
-                                    if (args.length > 3) {
-                                        Player p = Bukkit.getPlayer(args[3]);
-                                        if (p != null) {
-                                            if (cart.getLocation().distance(p.getLocation())
-                                                    < plugin.getConfig().getDouble("min-mount-distance")) {
-                                                cart.setPassenger(p);
+                                    // If "push" is specified, assign a normal direction vector according to
+                                    // the cardinal directions as the velocity and apply it to the cart
+                                    if (args.length > 2) {
+                                        if (args.length > 3) {
+                                            Player p = Bukkit.getPlayer(args[3]);
+                                            if (p != null) {
+                                                if (cart.getLocation().distance(p.getLocation())
+                                                        < plugin.getConfig().getDouble("min-mount-distance")) {
+                                                    cart.setPassenger(p);
+                                                }
                                             }
                                         }
-                                    }
-                                    if (args[2].equalsIgnoreCase("true")) {
-                                        Vector velocity = new Vector(0, 0, 0);
-                                        String direction = spawner.getDirection();
-                                        if (direction.equalsIgnoreCase("n")) {
-                                            velocity = new Vector(0, 0, -1);
-                                        } else if (direction.equalsIgnoreCase("w")) {
-                                            velocity = new Vector(-1, 0, 0);
-                                        } else if (direction.equalsIgnoreCase("s")) {
-                                            velocity = new Vector(0, 0, 1);
-                                        } else if (direction.equalsIgnoreCase("e")) {
-                                            velocity = new Vector(1, 0, 0);
+                                        if (args[2].equalsIgnoreCase("true")) {
+                                            BlockFace d = spawner.getDirection();
+                                            cart.setVelocity(new Vector(d.getModX(), d.getModY(), d.getModZ()));
                                         }
-
-                                        cart.setVelocity(velocity);
                                     }
                                 }
-                            }
-                        });
+                            });
 
-                        plugin.getLogger().info("Activated spawner '" + name + "'");
+                            plugin.getLogger().info("Activated spawner '" + name + "'");
+                        }
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
@@ -246,44 +242,40 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
             }
 
             if (args.length == 4) {
-                //SimpleRailwaySpawner spawner = plugin.getDatabase().find(SimpleRailwaySpawner.class).where()
-                //        .ieq("name", args[1]).findUnique();
-
                 // Find spawner by name and edit field if found
                 scheduler.runTaskAsynchronously(plugin, new Runnable() {
                     @Override
                     public void run() {
                         try {
-                            SimpleRailwaySpawner spawner = spawnerDao.queryBuilder().where().eq("name", args[1])
-                                    .queryForFirst();
+                            SimpleRailwaySpawner spawner = new SimpleRailwayQuery(spawnerDao)
+                                    .getSpawnerByName(args[1]);
 
                             if (spawner == null) {
                                 if (sender instanceof Player) {
                                     sender.sendMessage(ChatColor.RED
                                             + "No spawner was found with the specified name!");
-                                    return;
                                 }
-                            }
+                            } else {
+                                if (args[2].equalsIgnoreCase("x")) {
+                                    spawner.setX(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("y")) {
+                                    spawner.setY(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("z")) {
+                                    spawner.setZ(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("direction")) {
+                                    spawner.setDirection(stringToBlockFace(args[2]));
+                                } else if (args[2].equalsIgnoreCase("world")) {
+                                    spawner.setWorldName(args[3]);
+                                }
 
-                            if (args[2].equalsIgnoreCase("x")) {
-                                spawner.setX(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("y")) {
-                                spawner.setY(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("z")) {
-                                spawner.setZ(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("direction")) {
-                                spawner.setDirection(args[3]);
-                            } else if (args[2].equalsIgnoreCase("world")) {
-                                spawner.setWorldName(args[3]);
+                                spawnerDao.update(spawner);
+                                if (sender instanceof Player)
+                                    sender.sendMessage(ChatColor.GREEN + "Updated spawner " + ChatColor.BOLD
+                                            + "'" + args[1] + "'");
+                                plugin.getLogger().info("Updated spawner '" + args[1] + "'");
                             }
-
-                            spawnerDao.update(spawner);
-                            if (sender instanceof Player)
-                                sender.sendMessage(ChatColor.GREEN + "Updated spawner " + ChatColor.BOLD
-                                        + "'" + args[1] + "'");
-                            plugin.getLogger().info("Updated spawner '" + args[1] + "'");
                         } catch (SQLException e) {
-                            e.printStackTrace();
+                            plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                         }
                     }
                 });
@@ -301,8 +293,6 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                 return true;
             }
 
-            //List<SimpleRailwaySpawner> list = plugin.getDatabase().find(SimpleRailwaySpawner.class).findList();
-
             // Find all of the spawners and list them to the executor
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
@@ -313,12 +303,12 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                             for (SimpleRailwaySpawner spawner : list) {
                                 sender.sendMessage(spawner.getName() + ": at ["
                                         + spawner.getX() + ";" + spawner.getY() + ";"
-                                        + spawner.getZ() + "] facing " + spawner.getDirection().toUpperCase()
+                                        + spawner.getZ() + "] facing " + spawner.getDirection().toString()
                                         + " in world '" + spawner.getWorldName() + "'");
                             }
                         }
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });

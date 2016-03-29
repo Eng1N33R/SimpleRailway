@@ -3,16 +3,18 @@ package net.engin33r.bukkit.SimpleRailway;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 
+import java.util.UUID;
+
 @DatabaseTable(tableName = "sr_carts")
 public class SimpleRailwayCart {
     @DatabaseField(id = true)
-    private int id;
+    private UUID id;
 
-    public int getId() {
+    public UUID getId() {
         return id;
     }
 
-    public void setId(int id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 }

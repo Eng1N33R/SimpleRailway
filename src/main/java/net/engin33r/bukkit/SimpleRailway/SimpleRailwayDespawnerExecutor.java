@@ -2,6 +2,7 @@ package net.engin33r.bukkit.SimpleRailway;
 
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
+import com.j256.ormlite.support.ConnectionSource;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -15,6 +16,7 @@ import org.bukkit.scheduler.BukkitScheduler;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.logging.Level;
 
 /**
  * A {@link CommandExecutor} implementation for the /despawner command.
@@ -24,12 +26,12 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
     private Dao<SimpleRailwayDespawner, String> despawnerDao;
     private final BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
 
-    public SimpleRailwayDespawnerExecutor(SimpleRailway plugin) {
+    public SimpleRailwayDespawnerExecutor(SimpleRailway plugin, ConnectionSource source) {
         this.plugin = plugin;
         try {
-            this.despawnerDao = DaoManager.createDao(plugin.getConnectionSource(), SimpleRailwayDespawner.class);
+            this.despawnerDao = DaoManager.createDao(source, SimpleRailwayDespawner.class);
         } catch (SQLException e) {
-            e.printStackTrace();
+            plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
         }
     }
 
@@ -69,13 +71,12 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
             final World world = ((Entity) sender).getWorld();
             final Location loc = new Location(world, x, y, z);
 
-            //SimpleRailwayDespawner despawner = plugin.getDatabase().find(SimpleRailwayDespawner.class).where()
-            //        .ieq("name", name).findUnique();
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        SimpleRailwayDespawner despawner = despawnerDao.queryBuilder().where().eq("name", name).queryForFirst();
+                        SimpleRailwayDespawner despawner = new SimpleRailwayQuery(despawnerDao)
+                                .getDespawnerByName(name);
 
                         if (despawner != null) {
                             if (sender instanceof Player) {
@@ -94,7 +95,7 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
                         plugin.getLogger().info("Created despawner '" + name + "'");
                         plugin.getListener().updateList();
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
@@ -113,15 +114,12 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
             }
             final String name = args[1];
 
-            //SimpleRailwayDespawner despawner = plugin.getDatabase().find(SimpleRailwayDespawner.class).where()
-            //        .ieq("name", name).findUnique();
-
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        final SimpleRailwayDespawner despawner = despawnerDao.queryBuilder().where().eq("name", name)
-                                .queryForFirst();
+                        final SimpleRailwayDespawner despawner = new SimpleRailwayQuery(despawnerDao)
+                                .getDespawnerByName(name);
 
                         if (despawner == null) {
                             if (sender instanceof Player) {
@@ -135,7 +133,7 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
                                 + ChatColor.BOLD + "'" + name + "'");
                         plugin.getLogger().info("Deleted despawner '" + name + "'");
                     } catch (SQLException e) {
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
@@ -147,40 +145,37 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
             }
 
             if (args.length == 4) {
-                //SimpleRailwayDespawner despawner = plugin.getDatabase().find(SimpleRailwayDespawner.class).where()
-                //        .ieq("name", args[1]).findUnique();
                 scheduler.runTaskAsynchronously(plugin, new Runnable() {
                     @Override
                     public void run() {
                         try {
-                            SimpleRailwayDespawner despawner = despawnerDao.queryBuilder().where().eq("name", args[1])
-                                    .queryForFirst();
+                            SimpleRailwayDespawner despawner = new SimpleRailwayQuery(despawnerDao)
+                                    .getDespawnerByName(args[1]);
 
                             if (despawner == null) {
                                 if (sender instanceof Player) {
                                     sender.sendMessage(ChatColor.RED
                                             + "No despawner was found with the specified name!");
-                                    return;
                                 }
-                            }
+                            } else {
+                                if (args[2].equalsIgnoreCase("x")) {
+                                    despawner.setX(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("y")) {
+                                    despawner.setY(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("z")) {
+                                    despawner.setZ(Double.valueOf(args[3]));
+                                } else if (args[2].equalsIgnoreCase("world")) {
+                                    despawner.setWorldName(args[3]);
+                                }
 
-                            if (args[2].equalsIgnoreCase("x")) {
-                                despawner.setX(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("y")) {
-                                despawner.setY(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("z")) {
-                                despawner.setZ(Double.valueOf(args[3]));
-                            } else if (args[2].equalsIgnoreCase("world")) {
-                                despawner.setWorldName(args[3]);
+                                despawnerDao.update(despawner);
+                                if (sender instanceof Player)
+                                    sender.sendMessage(ChatColor.GREEN + "Updated despawner " + ChatColor.BOLD + "'"
+                                            + args[1] + "'");
+                                plugin.getLogger().info("Updated despawner '" + args[1] + "'");
                             }
-
-                            despawnerDao.update(despawner);
-                            if (sender instanceof Player)
-                                sender.sendMessage(ChatColor.GREEN + "Updated despawner " + ChatColor.BOLD + "'"
-                                        + args[1] + "'");
-                            plugin.getLogger().info("Updated despawner '" + args[1] + "'");
                         } catch (SQLException e) {
-                            e.printStackTrace();
+                            plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                         }
                     }
                 });
@@ -197,7 +192,6 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
                 return true;
             }
 
-            //List<SimpleRailwayDespawner> list = plugin.getDatabase().find(SimpleRailwayDespawner.class).findList();
             scheduler.runTaskAsynchronously(plugin, new Runnable() {
                 @Override
                 public void run() {
@@ -211,7 +205,7 @@ public class SimpleRailwayDespawnerExecutor implements CommandExecutor {
                             }
                         }
                     } catch (SQLException e) {
-                        plugin.getLogger().severe(e.getMessage());
+                        plugin.getLogger().log(Level.INFO, "An exception has occurred", e);
                     }
                 }
             });
