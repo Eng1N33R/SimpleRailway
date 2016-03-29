@@ -2,7 +2,6 @@ name: SimpleRailway
 main: net.engin33r.bukkit.SimpleRailway.SimpleRailway
 version: 0.0.3
 author: Ilya "EngiN33R" Gavrikov
-database: true
 
 commands:
   spawner:

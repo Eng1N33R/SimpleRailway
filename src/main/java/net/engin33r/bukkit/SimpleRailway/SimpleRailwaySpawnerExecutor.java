@@ -200,7 +200,7 @@ public class SimpleRailwaySpawnerExecutor implements CommandExecutor {
                             // Spawn minecart, force mount player and apply force if necessary
                             scheduler.runTask(plugin, new Runnable() {
                                 @Override
-                                public synchronized void run() {
+                                public void run() {
                                     final Minecart cart = Bukkit.getServer().getWorld(spawner.getWorldName())
                                             .spawn(spawner.getLocation(), Minecart.class);
 
